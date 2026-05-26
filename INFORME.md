@@ -45,7 +45,7 @@ graph TD
     end
 
     subgraph UserClient ["Cliente / Evaluador"]
-        F[Navegador Web<br>Docente / Tribunal]
+        F[Navegador Web<br>Docente]
     end
 
     A -- "Publica Telemetría (JSON)" --> B
@@ -113,13 +113,19 @@ chmod 600 .env
 
 | Fecha | Actividad Realizada | Responsable | Dificultad Superada |
 | :--- | :--- | :--- | :--- |
-| 25/05/2026 | Aprovisionamiento de instancia EC2 e instalación de entorno Docker. | Hernan Isaac Peñaranda | Resolución de permisos de ejecución en Linux para el socket de Docker sin uso de usuario root. |
-| 25/05/2026 | Codificación del archivo maestro de orquestación y despliegue de base de datos/visualizador. | Christian Angel Avila | Corrección de rutas de montaje de volúmenes persistentes para evitar pérdida de datos tras reinicios. |
-| 26/05/2026 | Implementación de seguridad perimetral (UFW), ocultamiento de secretos (.env) e integración del puente Telegraf. | Hernan y Christian | Solución de errores de autorización `401 Unauthorized` entre Telegraf e InfluxDB mediante recreación de volúmenes con token inyectado. |
+| 22/05/2026 | Creación de la máquina virtual en la nube (AWS EC2) e instalación de las herramientas de contenedores (Docker). | Peñaranda Villarroel Hernan Isaac | Al principio, el sistema de seguridad del servidor impedía ejecutar las herramientas de contenedores a menos que se usara la cuenta de administrador absoluto (root), lo cual es peligroso. Se solucionó creando un grupo de accesos especiales que permite operar los contenedores de forma segura y controlada sin poner en riesgo todo el servidor cloud. |
+| 14/05/2026 | Configuración del archivo maestro de orquestación para coordinar las bases de datos y el panel visual. | Ávilla Serrano Christian Ángel | Inicialmente, cada vez que el servidor se apagaba o se reiniciaba, todas las configuraciones realizadas y los datos de monitoreo acumulados se borraban por completo. Se solucionó configurando "volúmenes persistentes", que actúan como discos duros dedicados para que los programas guarden la información de forma permanente. |
+| 16/05/2026 | Configuración y corrección del arranque en el sistema de recepción de mensajes (Mosquitto). | Peñaranda Villarroel Hernan Isaac | El servidor de mensajería no podía encender porque el sistema automatizado confundió un archivo de configuración de texto con una carpeta del sistema, provocando un choque que congelaba el servicio. La dificultad se superó borrando el rastro erróneo mediante comandos de terminal y escribiendo manualmente un archivo de texto limpio con las reglas de acceso correctas. |
+| 20/05/2026 | Implementación del muro de seguridad (Firewall UFW) y protección de claves de acceso. | Ávilla Serrano Christian Ángel | Las contraseñas maestras de las bases de datos estaban escritas directamente en el código principal, lo que significaba que cualquiera que viera el proyecto podía robarlas. Se superó aislando todas las claves secretas dentro de un archivo oculto e independiente (`.env`) y activando un muro de seguridad digital que bloquea cualquier ataque externo, dejando abiertos únicamente los puertos indispensables. |
+| 21/05/2026 | Integración del puente de datos (Telegraf) y resolución de bloqueos de comunicación interna. | Peñaranda Villarroel Hernan Isaac | El recolector de datos no podía guardar la información porque la base de datos se había creado antes de configurar las nuevas claves de seguridad, por lo que rechazaba las conexiones al no reconocer la contraseña. Se solucionó limpiando la memoria temporal del servidor y forzando a todo el ecosistema a iniciar sincronizado desde el primer segundo con el mismo token de acceso. |
 
 ---
 
 ## 5. Capturas de Pantalla (Evidencias)
+
+### 5.1. Instancia EC2 AWS
+![AWS](./evidencias/captura_aws.png)
+*Descripción: Instancia AWS que aloja la máquina virtual Ubuntu Server evidenciando su ejecución correcta*
 
 ### 5.1. Contenedores Activos y Orquestación
 ![Docker PS](./evidencias/captura_docker_ps.png)
