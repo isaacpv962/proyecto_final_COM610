@@ -113,7 +113,7 @@ chmod 600 .env
 
 | Fecha | Actividad Realizada | Responsable | Dificultad Superada |
 | :--- | :--- | :--- | :--- |
-| 22/05/2026 | Creación de la máquina virtual en la nube (AWS EC2) e instalación de las herramientas de contenedores (Docker). | Peñaranda Villarroel Hernan Isaac | Al principio, el sistema de seguridad del servidor impedía ejecutar las herramientas de contenedores a menos que se usara la cuenta de administrador absoluto (root), lo cual es peligroso. Se solucionó creando un grupo de accesos especiales que permite operar los contenedores de forma segura y controlada sin poner en riesgo todo el servidor cloud. |
+| 14/05/2026 | Creación de la máquina virtual en la nube (AWS EC2) e instalación de las herramientas de contenedores (Docker). | Peñaranda Villarroel Hernan Isaac | Al principio, el sistema de seguridad del servidor impedía ejecutar las herramientas de contenedores a menos que se usara la cuenta de administrador absoluto (root), lo cual es peligroso. Se solucionó creando un grupo de accesos especiales que permite operar los contenedores de forma segura y controlada sin poner en riesgo todo el servidor cloud. |
 | 14/05/2026 | Configuración del archivo maestro de orquestación para coordinar las bases de datos y el panel visual. | Ávilla Serrano Christian Ángel | Inicialmente, cada vez que el servidor se apagaba o se reiniciaba, todas las configuraciones realizadas y los datos de monitoreo acumulados se borraban por completo. Se solucionó configurando "volúmenes persistentes", que actúan como discos duros dedicados para que los programas guarden la información de forma permanente. |
 | 16/05/2026 | Configuración y corrección del arranque en el sistema de recepción de mensajes (Mosquitto). | Peñaranda Villarroel Hernan Isaac | El servidor de mensajería no podía encender porque el sistema automatizado confundió un archivo de configuración de texto con una carpeta del sistema, provocando un choque que congelaba el servicio. La dificultad se superó borrando el rastro erróneo mediante comandos de terminal y escribiendo manualmente un archivo de texto limpio con las reglas de acceso correctas. |
 | 20/05/2026 | Implementación del muro de seguridad (Firewall UFW) y protección de claves de acceso. | Ávilla Serrano Christian Ángel | Las contraseñas maestras de las bases de datos estaban escritas directamente en el código principal, lo que significaba que cualquiera que viera el proyecto podía robarlas. Se superó aislando todas las claves secretas dentro de un archivo oculto e independiente (`.env`) y activando un muro de seguridad digital que bloquea cualquier ataque externo, dejando abiertos únicamente los puertos indispensables. |
@@ -127,18 +127,18 @@ chmod 600 .env
 ![AWS](./evidencias/captura_aws.png)
 *Descripción: Instancia AWS que aloja la máquina virtual Ubuntu Server evidenciando su ejecución correcta*
 
-### 5.1. Contenedores Activos y Orquestación
+### 5.2. Contenedores Activos y Orquestación
 ![Docker PS](./evidencias/captura_docker_ps.png)
 *Descripción: Salida del comando `docker compose ps` evidenciando los 4 servicios core ejecutándose de manera estable y exponiendo los puertos requeridos.*
 
-### 5.2. Reglas de Seguridad y Firewall
+### 5.3. Reglas de Seguridad y Firewall
 ![UFW Status](./evidencias/captura_ufw.png)
 *Descripción: Salida del comando `sudo ufw status verbose` demostrando la política restrictiva por defecto.*
 
-### 5.3. Ingesta de Datos en InfluxDB
+### 5.4. Ingesta de Datos en InfluxDB
 ![InfluxDB Data Explorer](./evidencias/captura_influxdb.png)
 *Descripción: Consola de InfluxDB registrando la telemetría simulada entrante a través del measurement `mqtt_consumer` procesado por Telegraf.*
 
-### 5.4. Visualización en Grafana
+### 5.5. Visualización en Grafana
 ![Dashboard Grafana](./evidencias/captura_grafana.png)
 *Descripción: Dashboard corporativo consumiendo la fuente de datos InfluxDB mediante lenguaje de consulta Flux.*
