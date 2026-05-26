@@ -1,8 +1,8 @@
 # Informe de Avance — Proyecto Final
 
-**Universidad San Francisco Xavier de Chuquisaca (USFX)**
-**Asignatura:** Trabajando en la Nube (COM610)
-**Docente:** Ing. Marcelo Quispe Ortega
+**Universidad San Francisco Xavier de Chuquisaca (USFX)** <br>
+**Asignatura:** Trabajando en la Nube (COM610) <br>
+**Docente:** Ing. Marcelo Quispe Ortega <br>
 **Semestre:** 1/2026
 
 **Título del Proyecto:** Plataforma Cloud End-to-End de Ingesta y Visualización de Datos IoT
