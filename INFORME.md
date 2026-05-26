@@ -29,24 +29,22 @@
 
 ## 2. Diagrama de Arquitectura
 
-## 2. Diagrama de Arquitectura
-
 *(Leyenda de estado: Los componentes dentro de la caja naranja ya se encuentran operativos en la nube. El componente físico está pendiente para la siguiente fase).*
 
 ```mermaid
 graph TD
-    subgraph Capa Física / Edge Node (Pendiente)
+    subgraph EdgeNode ["Capa Física / Edge Node (Pendiente)"]
         A[Microcontrolador ESP32<br>Sensores Ambientales]
     end
 
-    subgraph AWS EC2 t2.micro / Ubuntu 24.04 (Operativo)
+    subgraph AWSCloud ["AWS EC2 t2.micro / Ubuntu 24.04 (Operativo)"]
         B[Eclipse Mosquitto<br>Broker MQTT - Puerto 1883]
         C[Telegraf<br>Data Bridge]
         D[(InfluxDB v2<br>Base de Datos - Puerto 8086)]
-        E[Grafana<br>Dashboard Corporativo - Puerto 3000)]
+        E[Grafana<br>Dashboard Corporativo - Puerto 3000]
     end
 
-    subgraph Cliente / Evaluador
+    subgraph UserClient ["Cliente / Evaluador"]
         F[Navegador Web<br>Docente / Tribunal]
     end
 
