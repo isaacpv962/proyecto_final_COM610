@@ -73,7 +73,7 @@ graph TD
 
 **Aprovisionamiento y Conexión (AWS EC2):**
 ```bash
-ssh -i "llave_usfx.pem" ubuntu@IP_PUBLICA_AWS
+ssh -i "iot-server-claves.pem" ubuntu@34.201.16.79
 ```
 
 **Despliegue y Orquestación (Docker Compose):**
