@@ -1,4 +1,4 @@
-# Informe de Avance — Proyecto Final
+# Informe de Proyecto Final
 
 **Universidad San Francisco Xavier de Chuquisaca (USFX)** <br>
 **Asignatura:** Trabajando en la Nube (COM610) <br>
