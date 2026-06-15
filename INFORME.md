@@ -18,53 +18,77 @@
 
 | Componente | Rol en la Arquitectura | Tecnología | Puerto / Endpoint | Estado |
 | :--- | :--- | :--- | :--- | :--- |
-| **Edge Node** | Generación de telemetría física | ESP32 (Pines G) / MicroPython | N/A | Pendiente |
-| **Cloud Host** | Servidor IaaS principal | AWS EC2 (t2.micro - Ubuntu 24.04) | `34.201.16.79` | **Operativo** |
+| **Edge Node** | Generación de telemetría física | ESP32 (Pines G) / Simulador Python | N/A | **Operativo** |
+| **Punto de Acceso** | Balanceador de Carga y SSL | AWS Network Load Balancer (NLB) | DNS Público AWS | **Operativo** |
+| **Cloud Host** | Servidor IaaS y Orquestador | AWS EC2 (Auto Scaling Group) | Capacidad: 1-1-1 | **Operativo** |
+| **Storage** | Almacenamiento desacoplado | AWS EFS (Elastic File System) | Montaje en `/mnt/efs` | **Operativo** |
 | **MQTT Broker** | Recepción de mensajería IoT | Eclipse Mosquitto (Docker) | `1883/tcp` | **Operativo** |
 | **Data Bridge** | Transformación e ingesta | Telegraf (Docker) | Interno | **Operativo** |
-| **Database** | Almacenamiento de series temporales | InfluxDB v2 (Docker) | `8086/tcp` | **Operativo** |
-| **Dashboard** | Panel de visualización corporativa | Grafana (Docker) | `3000/tcp` | **Operativo** |
+| **Database** | Almacenamiento de series temporales | InfluxDB v2 (Docker) | `8086/tls` (HTTPS) | **Operativo** |
+| **Dashboard** | Panel de visualización corporativa | Grafana (Docker) | `443/tls` (HTTPS) | **Operativo** |
 
 ---
 
-## 2. Diagrama de Arquitectura
+## 2. Diagrama de Arquitectura de Alta Disponibilidad
 
-*(Leyenda de estado: Los componentes dentro de la caja naranja ya se encuentran operativos en la nube. El componente físico está pendiente para la siguiente fase).*
+*(Leyenda de estado: La arquitectura representa el entorno de producción actual, con tolerancia a fallos y cifrado en tránsito).*
 
 ```mermaid
 graph TD
-    subgraph EdgeNode ["Capa Física / Edge Node (Pendiente)"]
-        A[Microcontrolador ESP32<br>Sensores Ambientales]
+    subgraph EdgeNode ["Capa Física / Cliente"]
+        A[ESP32 / Simulador Python<br>Sensores Ambientales]
+        F[Navegador Web<br>Cliente/Evaluador]
     end
 
-    subgraph AWSCloud ["AWS EC2 t2.micro / Ubuntu 24.04 (Operativo)"]
-        B[Eclipse Mosquitto<br>Broker MQTT - Puerto 1883]
-        C[Telegraf<br>Data Bridge]
-        D[(InfluxDB v2<br>Base de Datos - Puerto 8086)]
-        E[Grafana<br>Dashboard Corporativo - Puerto 3000]
+    subgraph AWSCloud ["Infraestructura AWS (us-east-1)"]
+        
+        subgraph NLB ["Network Load Balancer (Punto de Entrada)"]
+            L1[Puerto 1883 - TCP]
+            L2[Puerto 443 - TLS/HTTPS]
+            L3[Puerto 8086 - TLS/HTTPS]
+        end
+        
+        subgraph ASG ["Auto Scaling Group (Self-Healing)"]
+            subgraph EC2 ["Instancia EC2 (Ubuntu 24.04)"]
+                B[Mosquitto MQTT<br>:1883]
+                C[Telegraf<br>Data Bridge]
+                D[(InfluxDB v2<br>:8086)]
+                E[Grafana<br>:3000]
+            end
+        end
+        
+        subgraph EFS ["Elastic File System"]
+            S[(Almacenamiento Persistente<br>/mnt/efs)]
+        end
     end
 
-    subgraph UserClient ["Cliente / Evaluador"]
-        F[Navegador Web<br>Docente]
-    end
+    A -- "Publica JSON (TCP)" --> L1
+    F -- "HTTPS (Certificado ACM)" --> L2
+    F -- "HTTPS (Certificado ACM)" --> L3
 
-    A -- "Publica Telemetría (JSON)" --> B
-    B -- "Suscripción a Tópicos" --> C
-    C -- "Escribe Datos (Influx Line Protocol)" --> D
-    E -- "Consulta de Métricas (Flux)" --> D
-    F -- "Visualización Panel (HTTP)" --> E
+    L1 -- "Forward TCP" --> B
+    L2 -- "Desencripta a TCP" --> E
+    L3 -- "Desencripta a TCP" --> D
+
+    B -- "Suscripción" --> C
+    C -- "Escribe Datos" --> D
+    E -- "Consulta (Flux)" --> D
+    
+    EC2 == "Montaje NFSv4" ==> S
 
     classDef aws fill:#FF9900,stroke:#232F3E,stroke-width:2px,color:black;
-    classDef edge fill:#E0E0E0,stroke:#888888,stroke-width:2px,color:black,stroke-dasharray: 5 5;
+    classDef edge fill:#E0E0E0,stroke:#888888,stroke-width:2px,color:black;
     classDef db fill:#22ADF6,stroke:#000000,stroke-width:2px,color:black;
     classDef dashboard fill:#F46800,stroke:#000000,stroke-width:2px,color:black;
-    classDef client fill:#ffffff,stroke:#000000,stroke-width:2px,color:black;
+    classDef asg fill:#3F8624,stroke:#232F3E,stroke-width:2px,color:white;
+    classDef nlb fill:#8C4FFF,stroke:#232F3E,stroke-width:2px,color:white;
     
-    class A edge;
-    class B,C aws;
-    class D db;
-    class E dashboard;
-    class F client;
+    class A,F edge;
+    class C aws;
+    class D,S db;
+    class B,E dashboard;
+    class ASG asg;
+    class NLB nlb;
 ```
 
 ---
@@ -73,72 +97,95 @@ graph TD
 
 **Aprovisionamiento y Conexión (AWS EC2):**
 ```bash
-ssh -i "iot-server-claves.pem" ubuntu@34.201.16.79
+ssh -i "iot-server-claves.pem" ubuntu@IP_PUBLICA
 ```
 
-**Despliegue y Orquestación (Docker Compose):**
+**Generación de Certificado SSL Autofirmado (FQDN estricto para ACM):**
 ```bash
-# Instalación del entorno
-sudo apt install docker.io docker-compose-v2 -y
-sudo usermod -aG docker ubuntu
+openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout clave_privada.key -out certificado.crt -subj "/C=BO/ST=Chuquisaca/L=Sucre/O=USFX/OU=Laboratorio Cloud/CN=iot-cloud.usfx.bo"
+```
 
-# Despliegue de la infraestructura leyendo variables del .env
+**Homologación de Permisos en Sistema de Archivos NFS (EFS):**
+```bash
+sudo chown -R 472:472 /mnt/efs/grafana
+```
+
+**Automatización de Despliegue (User Data para Launch Template):**
+```bash
+#!/bin/bash
+# 1. Montar disco de red EFS automáticamente
+mkdir -p /mnt/efs
+mount -t nfs4 -o nfsvers=4.1 TU_FILE_SYSTEM_ID.efs.us-east-1.amazonaws.com:/ /mnt/efs
+
+# 2. Iniciar orquestación Docker
+cd /home/ubuntu/iot-cloud
 docker compose up -d
-
-# Verificación de servicios y redes internas
-docker compose ps
-docker network ls
 ```
 
 **Seguridad y Firewall (UFW):**
 ```bash
-# Configuración de políticas restrictivas
 sudo ufw default deny incoming
 sudo ufw default allow outgoing
-
-# Apertura de puertos específicos
 sudo ufw allow 22/tcp
 sudo ufw allow 1883/tcp
 sudo ufw allow 8086/tcp
 sudo ufw allow 3000/tcp
 sudo ufw enable
-
-# Verificación de permisos de archivos sensibles
-chmod 600 .env
 ```
 
 ---
 
-## 4. Bitácora de Avance
+## 4. Consultas y Visualización de Datos (Flux Query)
 
-| Fecha | Actividad Realizada | Responsable | Dificultad Superada |
-| :--- | :--- | :--- | :--- |
-| 14/05/2026 | Creación de la máquina virtual en la nube (AWS EC2) e instalación de las herramientas de contenedores (Docker). | Peñaranda Villarroel Hernan Isaac | Al principio, el sistema de seguridad del servidor impedía ejecutar las herramientas de contenedores a menos que se usara la cuenta de administrador absoluto (root), lo cual es peligroso. Se solucionó creando un grupo de accesos especiales que permite operar los contenedores de forma segura y controlada sin poner en riesgo todo el servidor cloud. |
-| 14/05/2026 | Configuración del archivo maestro de orquestación para coordinar las bases de datos y el panel visual. | Ávilla Serrano Christian Ángel | Inicialmente, cada vez que el servidor se apagaba o se reiniciaba, todas las configuraciones realizadas y los datos de monitoreo acumulados se borraban por completo. Se solucionó configurando "volúmenes persistentes", que actúan como discos duros dedicados para que los programas guarden la información de forma permanente. |
-| 16/05/2026 | Configuración y corrección del arranque en el sistema de recepción de mensajes (Mosquitto). | Peñaranda Villarroel Hernan Isaac | El servidor de mensajería no podía encender porque el sistema automatizado confundió un archivo de configuración de texto con una carpeta del sistema, provocando un choque que congelaba el servicio. La dificultad se superó borrando el rastro erróneo mediante comandos de terminal y escribiendo manualmente un archivo de texto limpio con las reglas de acceso correctas. |
-| 20/05/2026 | Implementación del muro de seguridad (Firewall UFW) y protección de claves de acceso. | Ávilla Serrano Christian Ángel | Las contraseñas maestras de las bases de datos estaban escritas directamente en el código principal, lo que significaba que cualquiera que viera el proyecto podía robarlas. Se superó aislando todas las claves secretas dentro de un archivo oculto e independiente (`.env`) y activando un muro de seguridad digital que bloquea cualquier ataque externo, dejando abiertos únicamente los puertos indispensables. |
-| 21/05/2026 | Integración del puente de datos (Telegraf) y resolución de bloqueos de comunicación interna. | Peñaranda Villarroel Hernan Isaac | El recolector de datos no podía guardar la información porque la base de datos se había creado antes de configurar las nuevas claves de seguridad, por lo que rechazaba las conexiones al no reconocer la contraseña. Se solucionó limpiando la memoria temporal del servidor y forzando a todo el ecosistema a iniciar sincronizado desde el primer segundo con el mismo token de acceso. |
+Para la representación en tiempo real de Grafana, se inyectaron consultas Flux sobre el bucket `sensores`, el cual agrupa la telemetría recolectada por Telegraf en el measurement `mqtt_consumer`.
+
+**Consulta para Temperatura:**
+```flux
+from(bucket: "sensores")
+  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)
+  |> filter(fn: (r) => r["_measurement"] == "mqtt_consumer")
+  |> filter(fn: (r) => r["_field"] == "temperatura")
+  |> filter(fn: (r) => r["topic"] == "sensores/laboratorio")
+  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)
+  |> yield(name: "mean")
+```
+*(Se replicó la lógica equivalente filtrando por el field "humedad" para el gráfico secundario).*
 
 ---
 
-## 5. Capturas de Pantalla (Evidencias)
+## 5. Bitácora de Avance
 
-### 5.1. Instancia EC2 AWS
-![AWS](./evidencias/captura_aws.png)
-*Descripción: Instancia AWS que aloja la máquina virtual Ubuntu Server evidenciando su ejecución correcta*
+| Fecha | Actividad Realizada | Responsable | Dificultad Superada |
+| :--- | :--- | :--- | :--- |
+| 14/05/2026 | Creación de la máquina virtual (AWS EC2) e instalación de Docker. | Peñaranda V. Hernan | Restricciones de seguridad por ejecución en cuenta root. Resuelto creando un grupo de acceso Docker seguro. |
+| 14/05/2026 | Configuración del archivo maestro de orquestación. | Ávila S. Christian | Pérdida de datos al reiniciar el servidor. Resuelto configurando "volúmenes persistentes" locales. |
+| 16/05/2026 | Configuración y corrección del arranque en Mosquitto. | Peñaranda V. Hernan | Error de lectura de directorios vs archivos. Resuelto formateando un archivo `mosquitto.conf` limpio. |
+| 20/05/2026 | Implementación de Firewall (UFW) y protección de claves. | Ávila S. Christian | Exposición de contraseñas maestras. Resuelto aislando claves en un archivo `.env` y activando firewall restrictivo. |
+| 21/05/2026 | Integración de Telegraf y resolución de bloqueos internos. | Peñaranda V. Hernan | Fallo de conexión del recolector por caché desactualizado. Resuelto limpiando la memoria temporal y forzando sincronización. |
+| 14/06/2026 | Migración a Almacenamiento Desacoplado (AWS EFS) y Network Load Balancer. | Peñaranda V. Hernan | **Permisos EFS:** Grafana entraba en Crash Loop al intentar escribir en disco NFS de root. Resuelto homologando permisos al usuario no privilegiado `472`. |
+| 14/06/2026 | Implementación de Alta Disponibilidad (Auto Scaling Group) y cifrado TLS. | Ávila S. Christian | **Health Check Flapping:** El ASG destruía instancias sanas por retrasos de Docker. Resuelto aislando comprobaciones a TCP/EC2 y alargando periodos de gracia. El NLB bloqueaba certificados sin FQDN, resuelto inyectando variables con OpenSSL. |
+| 15/06/2026 | Gestión de Memoria, Ruteo Inverso y Dashboard en Tiempo Real. | Peñaranda y Ávila | **Asfixia de RAM (OOM Killer 137):** Contenedores bloqueados por saturación física. Resuelto escalando temporalmente la plantilla a una instancia EC2 `c7i-flex.large`. **Redirección Localhost:** Grafana generaba enlaces rotos en el NLB. Resuelto inyectando `GF_SERVER_ROOT_URL` en el despliegue. |
 
-### 5.2. Contenedores Activos y Orquestación
-![Docker PS](./evidencias/captura_docker_ps.png)
-*Descripción: Salida del comando `docker compose ps` evidenciando los 4 servicios core ejecutándose de manera estable y exponiendo los puertos requeridos.*
+---
 
-### 5.3. Reglas de Seguridad y Firewall
-![UFW Status](./evidencias/captura_ufw.png)
-*Descripción: Salida del comando `sudo ufw status verbose` demostrando la política restrictiva por defecto.*
+## 6. Capturas de Pantalla (Evidencias)
 
-### 5.4. Ingesta de Datos en InfluxDB
+### 6.1. Instancia AWS y Auto Scaling Group
+![AWS ASG](./evidencias/captura_aws.png)
+*Descripción: Instancia EC2 alojando la infraestructura, administrada bajo el rol de Alta Disponibilidad.*
+
+### 6.2. Seguridad Perimetral y Contenedores
+![Docker y NLB](./evidencias/captura_docker_ps.png)
+*Descripción: Contenedores en ejecución tras la inicialización del User Data, recibiendo tráfico desencriptado desde el NLB.*
+
+### 6.3. Almacenamiento Desacoplado
+![EFS Mount](./evidencias/captura_efs_mount.png)
+*Descripción: Salida de terminal (`df -h`) comprobando el montaje automático de Amazon EFS para persistencia global.*
+
+### 6.4. Base de Datos de Series de Tiempo
 ![InfluxDB Data Explorer](./evidencias/captura_influxdb.png)
-*Descripción: Consola de InfluxDB registrando la telemetría simulada entrante a través del measurement `mqtt_consumer` procesado por Telegraf.*
+*Descripción: Consola de InfluxDB registrando la telemetría simulada a través de Telegraf.*
 
-### 5.5. Visualización en Grafana
+### 6.5. Visualización de Monitoreo en Tiempo Real
 ![Dashboard Grafana](./evidencias/captura_grafana.png)
-*Descripción: Dashboard corporativo consumiendo la fuente de datos InfluxDB mediante lenguaje de consulta Flux.*
+*Descripción: Dashboard en Grafana consumiendo los buckets a través de conexión segura HTTPS, demostrando variables en vivo.*

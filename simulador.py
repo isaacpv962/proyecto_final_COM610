@@ -4,7 +4,7 @@ import json
 import random
 
 # --- Configuración ---
-BROKER = "34.201.16.79"
+BROKER = "iot-cloud-nlb-secure-759b7bbe1169c24a.elb.us-east-1.amazonaws.com"
 PORT = 1883
 TOPIC = "sensores/laboratorio"
 
@@ -43,7 +43,7 @@ try:
         print(f"[->] Enviado a {TOPIC}: {mensaje}")
         
         # Esperar 3 segundos antes del siguiente envío
-        time.sleep(3)
+        time.sleep(10)
         
 except KeyboardInterrupt:
     print("\nSimulación detenida por el usuario.")
