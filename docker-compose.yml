@@ -1,10 +1,10 @@
-ersion: '3.8'
-services:
-  mosquitto:
+version: '3.8'
+services:   
+  mosquitto:    
     image: eclipse-mosquitto:latest
     ports:
       - "1883:1883"
-    volumes:
+    volumes:    
       - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf
     restart: always
 
@@ -19,17 +19,17 @@ services:
       - DOCKER_INFLUXDB_INIT_ORG=${INFLUX_ORG}
       - DOCKER_INFLUXDB_INIT_BUCKET=${INFLUX_BUCKET}
       - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=${INFLUX_TOKEN}
-    volumes:
-      - influxdb_data:/var/lib/influxdb2
+    volumes:    
+      - /mnt/efs/influxdb:/var/lib/influxdb2
     restart: always
 
   telegraf:
     image: telegraf:latest
     environment:
       - INFLUX_TOKEN=${INFLUX_TOKEN}
-    volumes:
+    volumes:    
       - ./telegraf/telegraf.conf:/etc/telegraf/telegraf.conf:ro
-    depends_on:
+    depends_on: 
       - mosquitto
       - influxdb
     restart: always
@@ -37,3 +37,14 @@ services:
   grafana:
     image: grafana/grafana:latest
     ports:
+     - "3000:3000"
+    environment:
+      - GF_SERVER_ROOT_URL=https://iot-cloud-nlb-secure-759b7bbe1169c24a.elb.us-east-1.amazonaws.com/
+    volumes:
+      - /mnt/efs/grafana:/var/lib/grafana
+    restart: always
+
+volumes:
+  influxdb_data:
+  grafana_data:
+
